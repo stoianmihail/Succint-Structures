@@ -17,11 +17,9 @@ class LookupTable {
   }
   
   void process() {
-    std::cerr << "inside" << endl;
     table.resize(1u << x);
     // For each possible bit configuration of length x
     for (unsigned index = 0; index != (1u << x); ++index) {
-      std::cerr << "check index=" << index << endl;
       // Precompute the results
       table[index].resize(x);
       for (unsigned curr = 0, ptr = 0; ptr != x; ++ptr) {
