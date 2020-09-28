@@ -18,9 +18,9 @@ class LookupTable {
   
   void process() {
     table.resize(1u << x);
-    // For each possible bit configuration of length x
+    // For each possible bit string of length x
     for (unsigned index = 0; index != (1u << x); ++index) {
-      // Precompute the results
+      // Precompute the results on the inverted bit string
       table[index].resize(x);
       for (unsigned curr = 0, ptr = 0; ptr != x; ++ptr) {
         curr += ((index >> (x - ptr - 1)) & 1);
@@ -44,27 +44,25 @@ public:
     Reducer(RankSelect* master, unsigned startIndex) {
       this->master = master;
       stopIndex = std::min(startIndex + master->indirectionSize, master->size);
-      reductionSize = (1 + this->master->lg) / 2;
+      reductionSize = this->master->table->x;
       processReduction();
     }
     
     void processReduction() {
-      auto curr = 0, builder = 0;
+      auto curr = 0, prev = 0, builder = 0;
       for (unsigned index = startIndex; index != stopIndex; ++index) {
         if ((index != startIndex) && ((index - startIndex) % reductionSize == 0)) {
-          reduction.push_back(make_pair(builder, curr));
-          curr = 0;
+          reduction.push_back(make_pair(builder, prev));
+          prev = curr;
+          builder = 0;
         }
         builder = (builder << 1) + master->bitvector[index];
         curr += master->bitvector[index];
       }
       auto mod = (stopIndex - startIndex) % reductionSize;
-      if (!mod) {
-        reduction.push_back(make_pair(builder, curr));
-      } else {
+      if (!mod)
         builder <<= (reductionSize - mod);
-        reduction.push_back(make_pair(builder, curr));
-      }
+      reduction.push_back(make_pair(builder, curr));
     }
     
     unsigned query(unsigned pos) {
@@ -85,25 +83,23 @@ public:
     for (auto bit : bitvector)
       total += bit;
     lg = static_cast<unsigned>(std::log2(size));
-    std::cerr << "before init" << std::endl;
-    std::cerr << "lg=" << lg << endl;
-    table = new LookupTable((1 + lg) >> 1);
-    std::cerr << "after init" << std::endl;
+    table = new LookupTable((2 + lg) >> 1);
     indirectionSize = lg * lg;
+    std::cerr << "indirectionSize=" << indirectionSize << std::endl;
     processIndirection();
   }
   
   void processIndirection() {
-    auto curr = 0;
+    auto curr = 0, prev = 0;
     for (unsigned index = 0; index != size; ++index) {
       if ((index) && (index % indirectionSize == 0)) {
         auto reducer = new Reducer(this, index - indirectionSize);
-        indirection.push_back(make_pair(reducer, curr));
-        curr = 0;
+        indirection.push_back(make_pair(reducer, prev));
+        prev = curr;
       }
       curr += bitvector[index];
     }
-    auto last = (size % indirectionSize == 0) ? (size - indirectionSize) : ((size / indirectionSize) * indirectionSize);
+    auto last = (size % indirectionSize == 0) ? indirectionSize : (size % indirectionSize);
     auto reducer = new Reducer(this, last);
     indirection.push_back(make_pair(reducer, curr));
   }
@@ -114,7 +110,8 @@ public:
     auto indirectionBlock = pos / indirectionSize;
     auto partial = indirection[indirectionBlock].second;
     auto reducer = indirection[indirectionBlock].first;
-    return partial + reducer->query(pos);
+    std::cerr << "partial=" << partial << std::endl;
+    return partial + reducer->query(pos % indirectionSize);
   }
   
   unsigned succintSelect(unsigned x) {
@@ -146,22 +143,29 @@ public:
 };
 
 int main(void) {
-  ifstream input("1.in");
+  ifstream inputFile("1.in");
+  ifstream answerFile("1.ok");
   string str;
-  cin >> str;
+  inputFile >> str;
   vector<unsigned> bitvector(str.size());
   for (unsigned index = 0; index != str.size(); ++index)
     bitvector[index] = str[index] - '0';
   RankSelect rs(bitvector);
   unsigned m;
-  cin >> m;
+  inputFile >> m;
   while (m--) {
+    unsigned ans;
+    answerFile >> ans;
     char type; unsigned x;
-    cin >> type >> x;
+    inputFile >> type >> x;
     if (type == 'r') {
-      cout << rs.succintRank(x) << endl;
+      auto ret = rs.succintRank(x);
+      cout << "rank(" << x << ") = " << ret << endl;
+      assert(rs.succintRank(x) == rs.naiveRank(x));
+      assert(ans == rs.succintRank(x));
     } else {
       cout << rs.succintSelect(x) << endl;
+      assert(ans == rs.succintSelect(x));
     }
   }
   return 0;
