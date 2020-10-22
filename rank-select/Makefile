@@ -1,2 +1,2 @@
-rankselect: rank-select.cpp 
-	c++ -O3 rank-select.cpp
+access: access.cpp 
+	c++ -O3 -std=c++17 access.cpp
